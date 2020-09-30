@@ -13,7 +13,7 @@ library(readxl)
 ```
 
 ## Problem 1
-```{r}
+```{r trash_wheel}
 # Importing Mr. Trash Wheel dataset with omitting non-data entries and rows without dumpster-specific data, 
 # cleaning column names, rounding sports balls and converting them to integers.
 trash_data = 
@@ -28,7 +28,7 @@ trash_data =
 
 ```
 
-```{r}
+```{r precipitation}
 # Importing precipitation data for 2017 and 2018 years omitting the rows without precipitation data. 
 # Also adding year
 precipitation_2017 =
@@ -37,6 +37,7 @@ precipitation_2017 =
     sheet = "2017 Precipitation", 
     range = "A2:B14") %>% 
     janitor::clean_names() %>% 
+    drop_na(month) %>% 
     mutate(year = 2017) 
 
 precipitation_2018 =
@@ -45,15 +46,69 @@ precipitation_2018 =
     sheet = "2018 Precipitation", 
     range = "A2:B14") %>% 
     janitor::clean_names() %>% 
+    drop_na(month) %>% 
     mutate(year = 2018)
 
-# combining two sets together
+# combining two sets together with a helper dataframe
+month_df = 
+  tibble(
+    month = 1:12,
+    month_name = month.name
+  )
+
 precipitation_17_and_18 =
-bind_rows(precipitation_2017, precipitation_2018) %>%
-mutate(month = month.name[month])
+bind_rows(precipitation_2017,precipitation_2018)
+left_join(precipitation_17_and_18, month_df, by = "month")
+
 ```
 
 Mr. Trash Wheel dataset consists of `r trash_data %>% count() %>% pull(n)` records about `r trash_data %>% pull(dumpster) %>% last()` dumpsters. It describes collection of trash in different years (from `r trash_data %>% pull(date) %>% first()` to `r trash_data %>% pull(date) %>% last()`). It describes how much trash in tons and in cubic yards was collected by each dumpster at a given date with various types of trash: bottles, cigarette butts, grocery  bags,  etc. In total, Mr. Trash Wheel collected `r trash_data %>% pull(weight_tons) %>% sum()` tons of trash, which is an equivalent of `r trash_data %>% pull(volume_cubic_yards) %>% sum()` cubic yards of trash. The median number of sports balls pulled from dumpsters in 2017 was `r trash_data %>% filter(year==2017) %>% pull(sports_balls) %>% median()`. 
 Precipitation dataset contains the information about `r precipitation_17_and_18 %>% count() %>% pull(n)` precipitation in 2017 and 2018, with `r precipitation_17_and_18 %>% filter(year==2017) %>% pull(total) %>% sum()` total precipitation in 2017 and `r precipitation_17_and_18 %>% filter(year==2018) %>% pull(total) %>% sum()` total precipitation in 2018. 
+
+
+## Problem 2
+
+```{r transit data}
+# Importing and cleaning transit data
+transit_data = 
+  read_csv(
+    "./data/NYC_Transit_Subway_Entrance_And_Exit_Data.csv",
+    col_types = cols(
+      Route8 = col_character(),
+      Route9 = col_character(),
+      Route10 = col_character(),
+      Route11 = col_character())) %>% 
+  janitor::clean_names() %>% 
+  select( line, station_name, station_latitude, station_longitude, route1:route11, entrance_type ,entry, vending, ada) %>% 
+  mutate( entry = recode (entry, "YES" = TRUE,"NO" = FALSE)) %>%
+  mutate( vending = recode (vending, "YES" = TRUE,"NO" = FALSE))
+
+```
+
+NYC transit dataset consists of `r transit_data %>% count() %>% pull(n)` records about `r transit_data %>% distinct(station_name) %>% count()  %>% pull (n)` stations. It contains information about station latitude and longitude, routes served, entrance and exit info etc.
+To clean it up, I selected only needed variables, converted YES/NO variables into logical variables and..
+The dimensions of the dataset are `r nrow(transit_data)` and `r ncol(transit_data)`.
+The dataset isn't tidy.
+
+There are `r transit_data %>% distinct(line,station_name) %>% count()  %>% pull (n)` stations. 
+`r filter(transit_data, ada == "TRUE") %>% distinct(station_name, line) %>% count()  %>% pull (n)` stations are ADA compliant. The proportion of station entrances without vending but allowing entrance is `r (filter(transit_data, vending == "FALSE" & entry == "TRUE") %>% count() %>% pull(n)) / (filter(transit_data, vending == "FALSE") %>% count() %>% pull(n))`.
+
+```{r transit_data_cleaned}
+ 
+# Reformatting transit data so that route number and route name are distinct variables.
+transit_cleaned =
+  transit_data %>% 
+  pivot_longer(
+    route1:route11,
+    names_to = "route_number",
+    names_prefix = "route",#cut column namesv
+    values_to = "route_line") %>% 
+  relocate("route_line") %>% 
+  drop_na(route_line)
+
+```
+There are `r filter(transit_cleaned, route_line == "A") %>% distinct(station_name, line) %>% count() %>% pull (n)` distinct stations that serve the A train. Out of them, `r filter(transit_cleaned, route_line == "A" & ada == "TRUE") %>% distinct(station_name, line) %>% count() %>% pull (n)` are ada compliant.
+
+
 
 
